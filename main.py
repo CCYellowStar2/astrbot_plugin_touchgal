@@ -76,7 +76,7 @@ class Scheduler:
 """TouchGal API接口封装"""
 class TouchGalAPI:
     def __init__(self):
-        self.base_url = "https://www.touchgal.us/api"
+        self.base_url = "https://www.touchgal.top/api"
         self.search_url = f"{self.base_url}/search"
         self.download_url = f"{self.base_url}/patch/resource"
         self.temp_dir = StarTools.get_data_dir("astrbot_plugin_touchgal") / "tmp"
