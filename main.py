@@ -370,7 +370,7 @@ class AsyncGameCache:
     "astrbot_plugin_touchgal",
     "CCYellowStar2",
     "基于TouchGal API的Galgame信息查询与下载插件",
-    "1.2",
+    "1.3",
     "https://github.com/CCYellowStar2/astrbot_plugin_touchgal"
 )
 class TouchGalPlugin(Star):
