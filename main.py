@@ -14,7 +14,7 @@ import hashlib
 from typing import Dict, List, Union, Any, Tuple, Optional
 from PIL import Image, UnidentifiedImageError
 import astrbot.api.message_components as Comp
-from astrbot.api.message_components import Node, Plain, Image as CompImage
+from astrbot.api.message_components import Node, Nodes, Plain, Image as CompImage
 from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api.star import Context, Star, register, StarTools
 from astrbot.api.all import AstrBotConfig
@@ -487,29 +487,6 @@ class TouchGalPlugin(Star):
         except Exception as e:
             logger.warning(f"遍历目录失败: {directory}, 原因: {e}")
     
-    def _format_game_info(self, game_info: Dict[str, Any]) -> str:
-        """格式化游戏信息（未使用）"""
-        # 处理标签
-        tags = ", ".join(game_info.get("tags", []))
-        if len(tags) > 100:  # 防止标签过长
-            tags = tags[:97] + "..."
-            
-        # 处理平台
-        platforms = ", ".join(game_info.get("platform", []))
-        
-        # 处理日期
-        created_date = game_info.get("created", "")[:10]
-        
-        return (
-            f"🆔 游戏ID: {game_info['id']}\n"
-            f"🎮 名称: {game_info['name']}\n"
-            f"🏷️ 标签: {tags}\n"
-            f"📱 平台: {platforms}\n"
-            f"⬇️ 下载次数: {game_info.get('download', 0)}\n"
-            f"📅 添加日期: {created_date}\n"
-            f"🔍 使用 '/下载gal {game_info['id']}' 获取下载地址"
-        )
-
     def _relative_time(self, date_str: str) -> str:
         """将时间字符串转换为上海时间相对描述"""
 
@@ -547,41 +524,6 @@ class TouchGalPlugin(Star):
             years = int(seconds // 31536000)
             return f"{years}年前"
 
-
-
-    def _format_downloads(self, downloads: List[Dict[str, Any]]) -> str:
-        """格式化下载资源信息"""
-        result = []
-        for i, resource in enumerate(downloads, 1):
-            # 确定平台类型
-            if "windows" in resource["platform"]:
-                platform = "💻 PC"
-            elif "android" in resource["platform"]:
-                platform = "📱 手机"
-            else:
-                platform = "🕹️ 其他"
-                
-            # 获取发布时间并转换为相对时间
-            created_time = resource.get('created', '')
-            relative_time_str = self._relative_time(created_time) if created_time else "未知时间"
-            
-            # 构建资源信息的多行字符串
-            resource_info = [
-                f"{i}. {platform}版: {resource['name']}",
-                f"   📦 大小: {resource['size']}",
-                f"   🔗 下载地址: {resource['content']}",
-                f"      提取码: {resource['code'] or '无'}",
-                f"      解压码: {resource['password'] or '无'}",
-                f"      语言: {', '.join(resource['language'])}",
-                f"   🕒 发布时间: {relative_time_str}",  # 添加发布时间行
-                f"   📝 备注: {resource['note'] or '无'}"
-            ]
-            # 将资源信息列表中的字符串用换行连接
-            result.append("\n".join(resource_info))
-        
-        # 每个资源信息之间用换行分隔
-        return "\n\n".join(result)
-
     @filter.command("查询gal")
     async def search_galgame(self, event: AstrMessageEvent):
         """查询Gal信息（包含封面图片）"""
@@ -613,39 +555,69 @@ class TouchGalPlugin(Star):
             # 等待所有图片下载完成
             cover_paths = await asyncio.gather(*cover_tasks, return_exceptions=True)
             
-            # 构建消息链
-            chain = []
+            # 添加搜索结果标题作为第一个 Node
+            title_node = Node(
+                uin="3974507586",
+                name="玖玖瑠",
+                content=[Plain(f"🔍 找到 {len(results)} 个相关游戏:")]
+            )
             
-            # 添加搜索结果标题
-            response_lines = [f"🔍 找到 {len(results)} 个相关游戏:\n‎"]
-            chain.append(Plain(response_lines[0]))
-            # 为每个游戏添加图片和信息
+            # 为每个游戏创建一个 Node
+            game_nodes = []
             for i, (game, cover_path) in enumerate(zip(results, cover_paths), 1):
+                # 构建游戏信息链
+                game_chain = []
+                
                 # 添加游戏信息
                 game_info = [
                     f"{i}. 🆔 {game['id']}: {game['name']}",
                     f"(平台: {', '.join(game['platform'])})",
                     f"(语言: {', '.join(game['language'])})"
                 ]
-                chain.append(Plain("\n".join(game_info)))
+                game_chain.append(Plain("\n".join(game_info)))
+                
                 # 添加封面图片（如果有）
                 if cover_path and not isinstance(cover_path, Exception) and await async_exists(cover_path):
-                    chain.append(CompImage.fromFileSystem(cover_path))
+                    game_chain.append(CompImage.fromFileSystem(cover_path))
                 
-            
-            # 添加提示文本
-            chain.append(Plain("\n📌 使用 '/下载gal <游戏ID>' 获取下载地址"))
-            
-            if len(results) > 1:
+                # 创建 Node
                 node = Node(
-                    uin=3974507586,
+                    uin="3974507586",
                     name="玖玖瑠",
-                    content=chain
+                    content=game_chain
                 )
-                yield event.chain_result([node])
-            else:
-                # 发送消息
-                yield event.chain_result(chain)
+                game_nodes.append(node)
+            
+            # 添加提示文本作为最后一个 Node
+            hint_node = Node(
+                uin="3974507586",
+                name="玖玖瑠",
+                content=[Plain("📌 使用 '/下载gal <游戏ID>' 获取下载地址")]
+            )
+            
+            # 按 search_limit 限制分批发送（标题 Node 和提示 Node 不计入限制）
+            limit = self.search_limit
+            total_nodes = len(game_nodes)
+            current_index = 0
+            
+            while current_index < total_nodes:
+                # 每批包含标题 Node（仅第一批）、游戏 Node 和提示 Node（仅最后一批）
+                batch_nodes = []
+                if current_index == 0:
+                    batch_nodes.append(title_node)
+                
+                # 添加当前批次的游戏 Node
+                end_index = min(current_index + limit, total_nodes)
+                batch_nodes.extend(game_nodes[current_index:end_index])
+                
+                # 最后一批添加提示 Node
+                if end_index >= total_nodes:
+                    batch_nodes.append(hint_node)
+                
+                # 发送当前批次
+                yield event.chain_result([Nodes(batch_nodes)])
+                
+                current_index = end_index
                 
         except NoGameFound as e:
             yield event.plain_result(f"⚠️ {str(e)}")
@@ -690,33 +662,80 @@ class TouchGalPlugin(Star):
             
             # 格式化结果
             game_name = game_info["name"] if game_info else f"ID:{game_id}"
-            result = [
-                f"🎮 游戏: {game_name} (ID: {game_id})",
-                f"⬇️ 找到 {len(downloads)} 个下载资源:",
-                self._format_downloads(downloads)
-            ]
             
-            # 构建消息链
-            chain = []
-            
-            # 添加封面图片（如果有）
+            # 创建第一个 Node，显示游戏信息和下载数量（无论是否有封面）
+            first_node_chain = []
             if cover_image_path and await async_exists(cover_image_path):
-                chain.append(CompImage.fromFileSystem(cover_image_path))
+                first_node_chain.append(CompImage.fromFileSystem(cover_image_path))
+            first_node_chain.append(Plain(f"🎮 游戏: {game_name} (ID: {game_id})"))
+            first_node_chain.append(Plain(f"⬇️ 找到 {len(downloads)} 个下载资源:"))
+            first_node = Node(
+                uin="3974507586",
+                name="玖玖瑠",
+                content=first_node_chain
+            )
             
-            # 添加文本内容
-            chain.append(Plain("\n".join(result)))
-            
-            # 发送消息
-            if len(downloads) > 1:
-                node = Node(
-                    uin=3974507586,
+            # 为每个下载资源创建一个 Node
+            resource_nodes = []
+            for i, resource in enumerate(downloads, 1):
+                # 确定平台类型
+                platform = "🕹️ 其他"
+                if "windows" in resource.get("platform", ""):
+                    platform = "💻 PC"
+                elif "android" in resource.get("platform", ""):
+                    platform = "📱 手机"
+                
+                # 获取发布时间
+                created_time = resource.get('created', '')
+                relative_time_str = self._relative_time(created_time) if created_time else "未知时间"
+                
+                # 构建资源信息
+                resource_info = [
+                    f"{i}. {platform}版: {resource.get('name', '未知名称')}",
+                    f"   语言: {', '.join(resource.get('language', [])) or '未知'}",
+                    f"   🕒 发布时间: {relative_time_str}",
+                    f"   📝 备注: {resource.get('note') or '无'}"
+                ]
+                
+                # 添加下载链接信息
+                links = resource.get('links', [])
+                if links:
+                    for j, link in enumerate(links, 1):
+                        resource_info.append(f"   --- 链接{j} ---")
+                        resource_info.append(f"   📦 大小: {link.get('size', '未知')}")
+                        resource_info.append(f"   🔗 下载地址: {link.get('content', '暂无')}")
+                        resource_info.append(f"      提取码: {link.get('code') or '无'}")
+                        resource_info.append(f"      解压码: {link.get('password') or '无'}")
+                else:
+                    resource_info.append("   ❌ 暂无下载链接")
+                
+                # 创建 Node
+                node_chain = [Plain("\n".join(resource_info))]
+                resource_nodes.append(Node(
+                    uin="3974507586",
                     name="玖玖瑠",
-                    content=chain
-                )
-                yield event.chain_result([node])
-            else:
-                # 发送消息
-                yield event.chain_result(chain)
+                    content=node_chain
+                ))
+            
+            # 按 search_limit 限制分批发送（第一个 Node 不计入限制）
+            limit = self.search_limit
+            total_nodes = len(resource_nodes)
+            current_index = 0
+            
+            while current_index < total_nodes:
+                # 每批包含第一个 Node（仅第一批）和不超过 limit 个资源 Node
+                batch_nodes = []
+                if current_index == 0:
+                    batch_nodes.append(first_node)
+                
+                # 添加当前批次的资源 Node
+                end_index = min(current_index + limit, total_nodes)
+                batch_nodes.extend(resource_nodes[current_index:end_index])
+                
+                # 发送当前批次
+                yield event.chain_result([Nodes(batch_nodes)])
+                
+                current_index = end_index
             
         except ValueError as e:
             yield event.plain_result(f"⚠️ {str(e)}")
