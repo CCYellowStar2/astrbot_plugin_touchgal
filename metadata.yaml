@@ -1,7 +1,7 @@
 name: astrbot_plugin_touchgal # 这是你的插件的唯一识别名。
 display_name: TouchGal 查询 # 插件展示名，在插件市场等场景中显示
 desc: 基于TouchGal API的Galgame信息查询与下载插件 # 插件简短描述
-version: v1.3 # 插件版本号。格式：v1.1.1 或者 v1.1
+version: v1.4 # 插件版本号。格式：v1.1.1 或者 v1.1
 author: CCYellowStar2 # 作者
 repo: https://github.com/CCYellowStar2/astrbot_plugin_touchgal # 插件的仓库地址
 
