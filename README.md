@@ -33,6 +33,8 @@
 
 ```V1.3``` 更新apiurl
 
+```V1.4``` 修复KeyError: 'size'错误、优化下载项目分隔、新增插件展示名
+
 # 支持
 
 [帮助文档](https://astrbot.app)
