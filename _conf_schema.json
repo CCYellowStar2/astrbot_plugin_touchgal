@@ -1,8 +1,8 @@
 {
     "search_limit":{
-        "description": "搜索返回显示的最大数量",
+        "description": "结果最大数量",
         "type": "int",
-        "hint": "搜索返回显示的最大数量",
+        "hint": "搜索和下载返回显示的最大数量",
         "default": 15,
         "min": 1,
         "max": 99
